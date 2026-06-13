@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS — AI Assistant</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --hud-cyan: #00d4ff;
+    --hud-blue: #0088cc;
+    --hud-dim: #004466;
+    --hud-bg: #020d14;
+    --hud-panel: rgba(0,20,35,0.92);
+    --hud-border: rgba(0,212,255,0.3);
+    --hud-glow: 0 0 10px rgba(0,212,255,0.4);
+    --hud-text: #7fd4e8;
+    --hud-bright: #00eeff;
+    --hud-error: #ff4466;
+    --hud-success: #00ffaa;
+    --hud-warn: #ffaa00;
+  }
+
+  body {
+    background: var(--hud-bg);
+    color: var(--hud-cyan);
+    font-family: 'Share Tech Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+
+  /* SCANLINE EFFECT */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* TITLE BAR */
+  #titlebar {
+    height: 36px;
+    background: rgba(0,8,16,0.95);
+    border-bottom: 1px solid var(--hud-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+
+  #titlebar .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 14px;
+    color: var(--hud-bright);
+    letter-spacing: 4px;
+    text-shadow: 0 0 12px var(--hud-cyan);
+  }
+
+  #titlebar .status-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 10px;
+    color: var(--hud-text);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--hud-success);
+    display: inline-block;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+  }
+  .status-dot.off { background: var(--hud-error); animation: none; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  #titlebar .win-controls {
+    display: flex;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+  }
+
+  .win-btn {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  .win-btn.close { background: #ff5f57; }
+  .win-btn.min { background: #ffbd2e; }
+  .win-btn.max { background: #28c840; }
+
+  /* MAIN LAYOUT */
+  #main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    grid-template-rows: 1fr auto;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* HUD PANELS */
+  .hud-panel {
+    background: var(--hud-panel);
+    border-right: 1px solid var(--hud-border);
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-app-region: no-drag;
+  }
+  .hud-panel:last-child { border-right: none; border-left: 1px solid var(--hud-border); }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--hud-bright);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--hud-border);
+    text-transform: uppercase;
+  }
+
+  /* SETTINGS PANEL */
+  .setting-group { margin-bottom: 16px; }
+  .setting-label {
+    font-size: 10px;
+    color: var(--hud-text);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  select, input[type=text], input[type=password] {
+    width: 100%;
+    background: rgba(0,30,50,0.8);
+    border: 1px solid var(--hud-border);
+    color: var(--hud-cyan);
+    padding: 6px 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    -webkit-app-region: no-drag;
+  }
+  select:focus, input:focus { border-color: var(--hud-cyan); box-shadow: var(--hud-glow); }
+
+  .hud-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--hud-cyan);
+    color: var(--hud-cyan);
+    padding: 7px 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    -webkit-app-region: no-drag;
+  }
+  .hud-btn:hover { background: rgba(0,212,255,0.12); box-shadow: var(--hud-glow); }
+  .hud-btn:active { transform: scale(0.97); }
+
+  /* COMMANDS LIST */
+  .cmd-item {
+    background: rgba(0,20,35,0.6);
+    border: 1px solid rgba(0,212,255,0.1);
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    -webkit-app-region: no-drag;
+  }
+  .cmd-item:hover { border-color: var(--hud-cyan); color: var(--hud-bright); }
+  .cmd-keyword { color: var(--hud-warn); font-size: 9px; display: block; margin-top: 2px; }
+
+  /* CENTER PANEL */
+  #center {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-app-region: no-drag;
+  }
+
+  /* CHAT AREA */
+  #chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #chat-area::-webkit-scrollbar { width: 4px; }
+  #chat-area::-webkit-scrollbar-track { background: transparent; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--hud-dim); }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    border: 1px solid var(--hud-border);
+    position: relative;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .msg-user {
+    background: rgba(0,60,90,0.5);
+    align-self: flex-end;
+    border-color: rgba(0,136,204,0.5);
+    color: #aaddff;
+  }
+
+  .msg-jarvis {
+    background: rgba(0,20,35,0.7);
+    align-self: flex-start;
+    border-color: rgba(0,212,255,0.25);
+    color: var(--hud-text);
+  }
+
+  .msg-jarvis::before {
+    content: 'JARVIS';
+    display: block;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    color: var(--hud-bright);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
+
+  .msg-sys {
+    align-self: center;
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    color: var(--hud-dim);
+    letter-spacing: 1px;
+    border-top: 1px solid rgba(0,212,255,0.1);
+    border-bottom: 1px solid rgba(0,212,255,0.1);
+    padding: 4px 16px;
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 1px solid rgba(0,212,255,0.2);
+    align-self: flex-start;
+    background: rgba(0,20,35,0.7);
+  }
+  .typing-dot {
+    width: 5px; height: 5px;
+    background: var(--hud-cyan);
+    border-radius: 50%;
+    animation: typing 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typing { 0%,60%,100% { opacity: 0.2; } 30% { opacity: 1; } }
+
+  /* INPUT AREA */
+  #input-area {
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--hud-border);
+    background: rgba(0,8,16,0.9);
+  }
+
+  #input-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  #voice-btn {
+    width: 48px;
+    background: transparent;
+    border: 1px solid var(--hud-cyan);
+    color: var(--hud-cyan);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  #voice-btn:hover { background: rgba(0,212,255,0.1); }
+  #voice-btn.listening {
+    border-color: var(--hud-error);
+    color: var(--hud-error);
+    animation: blink 0.7s infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  #text-input {
+    flex: 1;
+    background: rgba(0,20,35,0.7);
+    border: 1px solid var(--hud-border);
+    color: var(--hud-bright);
+    padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    caret-color: var(--hud-cyan);
+  }
+  #text-input:focus { border-color: var(--hud-cyan); box-shadow: var(--hud-glow); }
+  #text-input::placeholder { color: rgba(0,212,255,0.3); }
+
+  #send-btn {
+    background: rgba(0,212,255,0.1);
+    border: 1px solid var(--hud-cyan);
+    color: var(--hud-cyan);
+    padding: 0 16px;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  #send-btn:hover { background: rgba(0,212,255,0.2); box-shadow: var(--hud-glow); }
+
+  #voice-status {
+    font-size: 10px;
+    color: var(--hud-text);
+    margin-top: 6px;
+    min-height: 14px;
+    letter-spacing: 1px;
+  }
+
+  /* VISUALIZER */
+  #visualizer {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .bar {
+    width: 3px;
+    background: var(--hud-cyan);
+    border-radius: 1px;
+    min-height: 2px;
+    transition: height 0.1s;
+    opacity: 0.6;
+  }
+
+  /* STATS PANEL */
+  .stat-item {
+    background: rgba(0,20,35,0.5);
+    border: 1px solid rgba(0,212,255,0.1);
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .stat-label { font-size: 9px; color: var(--hud-text); letter-spacing: 1px; text-transform: uppercase; }
+  .stat-value { font-size: 15px; color: var(--hud-bright); font-family: 'Orbitron', sans-serif; margin-top: 2px; }
+  .stat-sub { font-size: 9px; color: rgba(0,212,255,0.4); margin-top: 2px; }
+
+  /* CLOCK */
+  #clock {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 22px;
+    color: var(--hud-bright);
+    text-align: center;
+    letter-spacing: 4px;
+    margin-bottom: 4px;
+    text-shadow: 0 0 20px var(--hud-cyan);
+  }
+  #date {
+    font-size: 9px;
+    color: var(--hud-text);
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+  }
+
+  /* CORNER DECORATIONS */
+  .corner-tl, .corner-tr, .corner-bl, .corner-br {
+    position: fixed;
+    width: 30px; height: 30px;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .corner-tl { top: 36px; left: 220px; border-top: 1px solid var(--hud-cyan); border-left: 1px solid var(--hud-cyan); }
+  .corner-tr { top: 36px; right: 220px; border-top: 1px solid var(--hud-cyan); border-right: 1px solid var(--hud-cyan); }
+  .corner-bl { bottom: 0; left: 220px; border-bottom: 1px solid var(--hud-cyan); border-left: 1px solid var(--hud-cyan); }
+  .corner-br { bottom: 0; right: 220px; border-bottom: 1px solid var(--hud-cyan); border-right: 1px solid var(--hud-cyan); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--hud-border); }
+</style>
+</head>
+<body>
+
+<div id="titlebar">
+  <span class="logo">J.A.R.V.I.S</span>
+  <div class="status-row">
+    <span><span class="status-dot" id="ai-dot"></span><span id="ai-status-text">OFFLINE</span></span>
+    <span id="model-display">MODEL: —</span>
+  </div>
+  <div class="win-controls">
+    <button class="win-btn min" onclick="window.electronAPI?.minimize()"></button>
+    <button class="win-btn max" onclick="window.electronAPI?.maximize()"></button>
+    <button class="win-btn close" onclick="window.electronAPI?.close()"></button>
+  </div>
+</div>
+
+<div class="corner-tl"></div>
+<div class="corner-tr"></div>
+<div class="corner-bl"></div>
+<div class="corner-br"></div>
+
+<div id="main">
+  <!-- LEFT PANEL: SETTINGS -->
+  <div class="hud-panel">
+    <div class="panel-title">⚙ Config</div>
+
+    <div class="setting-group">
+      <div class="setting-label">AI Provider</div>
+      <select id="provider" onchange="updateProvider()">
+        <option value="groq">Groq (Free/Fast)</option>
+        <option value="ollama">Ollama (Local/Free)</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic Claude</option>
+      </select>
+    </div>
+
+    <div class="setting-group" id="api-key-group">
+      <div class="setting-label">API Key</div>
+      <input type="password" id="api-key" placeholder="Enter API key..." />
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Model</div>
+      <select id="model-select">
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B (Fast)</option>
+        <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Voice</div>
+      <select id="voice-select"></select>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Speech Rate</div>
+      <select id="speech-rate">
+        <option value="0.8">Slow</option>
+        <option value="1.0" selected>Normal</option>
+        <option value="1.3">Fast</option>
+      </select>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Language</div>
+      <select id="lang-select">
+        <option value="en-IN">English (India)</option>
+        <option value="en-US">English (US)</option>
+        <option value="hi-IN">Hindi</option>
+      </select>
+    </div>
+
+    <button class="hud-btn" onclick="testConnection()" style="margin-bottom:8px">◉ Test Connection</button>
+    <button class="hud-btn" onclick="clearChat()">✕ Clear Chat</button>
+
+    <div style="margin-top:16px;">
+      <div class="setting-label" style="margin-bottom:6px">System Prompt</div>
+      <textarea id="system-prompt"
+        style="width:100%;height:80px;background:rgba(0,20,35,0.7);border:1px solid var(--hud-border);color:var(--hud-text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:6px;resize:vertical;outline:none;-webkit-app-region:no-drag"
+      >You are JARVIS, a highly intelligent AI assistant. Be concise, helpful, and precise. When given tasks, execute them efficiently.</textarea>
+    </div>
+  </div>
+
+  <!-- CENTER: CHAT -->
+  <div id="center">
+    <div id="chat-area">
+      <div class="msg msg-sys">— SYSTEM INITIALIZED —</div>
+      <div class="msg msg-jarvis">Good day. I am JARVIS. Configure your AI provider on the left and press Test Connection to begin. You can speak to me using the microphone button or type your query below.</div>
+    </div>
+
+    <div id="input-area">
+      <div id="input-wrapper">
+        <button id="voice-btn" onclick="toggleVoice()" title="Hold to speak">🎤</button>
+        <div id="visualizer"></div>
+        <input type="text" id="text-input" placeholder="Ask JARVIS anything..." onkeydown="handleKey(event)" />
+        <button id="send-btn" onclick="sendMessage()">SEND ▶</button>
+      </div>
+      <div id="voice-status">[ VOICE READY — CLICK MIC TO SPEAK ]</div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: STATS & COMMANDS -->
+  <div class="hud-panel">
+    <div id="clock">00:00:00</div>
+    <div id="date">LOADING...</div>
+
+    <div class="panel-title">◈ Stats</div>
+    <div class="stat-item">
+      <div class="stat-label">Queries</div>
+      <div class="stat-value" id="stat-queries">0</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Avg Response</div>
+      <div class="stat-value" id="stat-speed">—</div>
+      <div class="stat-sub">milliseconds</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Session</div>
+      <div class="stat-value" id="stat-session">00:00</div>
+    </div>
+
+    <div class="panel-title" style="margin-top:16px">⚡ Commands</div>
+    <div class="cmd-item" onclick="sendQuick('Open YouTube')">
+      Open YouTube
+      <span class="cmd-keyword">say: open youtube</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('What is the time right now?')">
+      Current Time
+      <span class="cmd-keyword">say: what time is it</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('Tell me a quick joke')">
+      Tell a Joke
+      <span class="cmd-keyword">say: tell me a joke</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('What is the weather like in Delhi today?')">
+      Delhi Weather
+      <span class="cmd-keyword">say: weather in delhi</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('Search Google for latest AI news')">
+      Search AI News
+      <span class="cmd-keyword">say: search AI news</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('Write a to-do list template for today')">
+      Today's Plan
+      <span class="cmd-keyword">say: make a plan</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('Translate \"Hello, how are you?\" to Hindi')">
+      Translate to Hindi
+      <span class="cmd-keyword">say: translate to hindi</span>
+    </div>
+    <div class="cmd-item" onclick="sendQuick('Explain quantum computing simply')">
+      Explain Concept
+      <span class="cmd-keyword">say: explain quantum</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const state = {
+  provider: 'groq',
+  model: 'llama-3.3-70b-versatile',
+  apiKey: '',
+  lang: 'en-IN',
+  listening: false,
+  speaking: false,
+  queries: 0,
+  totalMs: 0,
+  sessionStart: Date.now(),
+  convHistory: [],
+  recognition: null,
+  voices: [],
+};
+
+// ─── PROVIDER CONFIG ─────────────────────────────────────────────────────────
+const PROVIDERS = {
+  groq: {
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    models: [
+      { v: 'llama-3.3-70b-versatile', l: 'Llama 3.3 70B (Best)' },
+      { v: 'llama-3.1-8b-instant', l: 'Llama 3.1 8B (Fast)' },
+      { v: 'mixtral-8x7b-32768', l: 'Mixtral 8x7B' },
+    ],
+    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }),
+    needsKey: true,
+    keyHint: 'Get FREE key: console.groq.com',
+  },
+  ollama: {
+    url: 'http://localhost:11434/api/chat',
+    models: [
+      { v: 'llama3', l: 'Llama 3 (Local)' },
+      { v: 'mistral', l: 'Mistral (Local)' },
+      { v: 'phi3', l: 'Phi-3 Mini (Fast)' },
+      { v: 'gemma2', l: 'Gemma 2 (Local)' },
+    ],
+    headers: () => ({ 'Content-Type': 'application/json' }),
+    needsKey: false,
+    keyHint: 'No key needed! Run: ollama pull llama3',
+  },
+  openai: {
+    url: 'https://api.openai.com/v1/chat/completions',
+    models: [
+      { v: 'gpt-4o-mini', l: 'GPT-4o Mini' },
+      { v: 'gpt-4o', l: 'GPT-4o' },
+    ],
+    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }),
+    needsKey: true,
+    keyHint: 'Get key: platform.openai.com',
+  },
+  anthropic: {
+    url: 'https://api.anthropic.com/v1/messages',
+    models: [
+      { v: 'claude-haiku-4-5-20251001', l: 'Claude Haiku (Fast)' },
+      { v: 'claude-sonnet-4-6', l: 'Claude Sonnet' },
+    ],
+    headers: (key) => ({
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    }),
+    needsKey: true,
+    keyHint: 'Get key: console.anthropic.com',
+  },
+};
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  buildVisualizer();
+  updateClock();
+  setInterval(updateClock, 1000);
+  setInterval(updateSession, 1000);
+  loadVoices();
+  loadSaved();
+  updateProvider();
+  setupSpeechRecognition();
+};
+
+function loadSaved() {
+  const saved = localStorage.getItem('jarvis_config');
+  if (saved) {
+    const cfg = JSON.parse(saved);
+    if (cfg.provider) { document.getElementById('provider').value = cfg.provider; state.provider = cfg.provider; }
+    if (cfg.apiKey) document.getElementById('api-key').value = cfg.apiKey;
+    if (cfg.lang) { document.getElementById('lang-select').value = cfg.lang; state.lang = cfg.lang; }
+    if (cfg.rate) document.getElementById('speech-rate').value = cfg.rate;
+  }
+}
+
+function saveConfig() {
+  localStorage.setItem('jarvis_config', JSON.stringify({
+    provider: state.provider,
+    apiKey: document.getElementById('api-key').value,
+    lang: document.getElementById('lang-select').value,
+    rate: document.getElementById('speech-rate').value,
+  }));
+}
+
+// ─── CLOCK ───────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-IN', { hour12: false });
+  document.getElementById('date').textContent =
+    now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
+}
+
+function updateSession() {
+  const s = Math.floor((Date.now() - state.sessionStart) / 1000);
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  document.getElementById('stat-session').textContent = `${m}:${sec}`;
+}
+
+// ─── VISUALIZER ──────────────────────────────────────────────────────────────
+function buildVisualizer() {
+  const v = document.getElementById('visualizer');
+  for (let i = 0; i < 20; i++) {
+    const b = document.createElement('div');
+    b.className = 'bar';
+    b.style.height = '2px';
+    v.appendChild(b);
+  }
+}
+
+function animateVisualizer(active) {
+  const bars = document.querySelectorAll('.bar');
+  if (active) {
+    bars.forEach(b => {
+      b.style.height = Math.random() * 18 + 2 + 'px';
+      b.style.opacity = Math.random() * 0.4 + 0.4;
+    });
+  } else {
+    bars.forEach(b => { b.style.height = '2px'; b.style.opacity = '0.3'; });
+  }
+}
+
+// ─── PROVIDER ────────────────────────────────────────────────────────────────
+function updateProvider() {
+  const p = document.getElementById('provider').value;
+  state.provider = p;
+  const cfg = PROVIDERS[p];
+  const sel = document.getElementById('model-select');
+  sel.innerHTML = cfg.models.map(m => `<option value="${m.v}">${m.l}</option>`).join('');
+  state.model = cfg.models[0].v;
+
+  const kg = document.getElementById('api-key-group');
+  const ki = document.getElementById('api-key');
+  if (!cfg.needsKey) {
+    kg.style.opacity = '0.5';
+    ki.placeholder = cfg.keyHint;
+    ki.disabled = true;
+  } else {
+    kg.style.opacity = '1';
+    ki.placeholder = cfg.keyHint;
+    ki.disabled = false;
+  }
+  document.getElementById('model-display').textContent = `PROVIDER: ${p.toUpperCase()}`;
+  saveConfig();
+}
+
+// ─── AI API CALL ─────────────────────────────────────────────────────────────
+async function callAI(userMsg) {
+  const p = state.provider;
+  const cfg = PROVIDERS[p];
+  const key = document.getElementById('api-key').value.trim();
+  const model = document.getElementById('model-select').value;
+  const systemPrompt = document.getElementById('system-prompt').value;
+
+  state.convHistory.push({ role: 'user', content: userMsg });
+  if (state.convHistory.length > 20) state.convHistory = state.convHistory.slice(-20);
+
+  let body, url = cfg.url;
+
+  if (p === 'ollama') {
+    body = JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...state.convHistory],
+      stream: false,
+    });
+  } else if (p === 'anthropic') {
+    body = JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: state.convHistory,
+    });
+  } else {
+    body = JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...state.convHistory],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+  }
+
+  const res = await fetch(url, { method: 'POST', headers: cfg.headers(key), body });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  let reply;
+
+  if (p === 'ollama') {
+    reply = data.message?.content || data.choices?.[0]?.message?.content;
+  } else if (p === 'anthropic') {
+    reply = data.content?.[0]?.text;
+  } else {
+    reply = data.choices?.[0]?.message?.content;
+  }
+
+  if (!reply) throw new Error('Empty response from AI');
+  state.convHistory.push({ role: 'assistant', content: reply });
+  return reply;
+}
+
+// ─── TASK HANDLER ────────────────────────────────────────────────────────────
+async function handleTask(text) {
+  const t = text.toLowerCase();
+
+  if (t.includes('open youtube') || t.includes('youtube kholo')) {
+    window.open('https://youtube.com', '_blank');
+    return 'Opening YouTube for you, sir.';
+  }
+  if (t.includes('open google') || t.includes('google kholo')) {
+    window.open('https://google.com', '_blank');
+    return 'Opening Google.';
+  }
+  if (t.includes('search') && (t.includes('google') || t.includes('web'))) {
+    const q = text.replace(/search (google |web |for )?/i, '').trim();
+    window.open(`https://google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+    return `Searching for "${q}" on Google.`;
+  }
+  if (t.includes('open github')) {
+    window.open('https://github.com', '_blank');
+    return 'Opening GitHub.';
+  }
+  if (t.includes('open chatgpt')) {
+    window.open('https://chat.openai.com', '_blank');
+    return 'Opening ChatGPT.';
+  }
+
+  return await callAI(text);
+}
+
+// ─── SEND MESSAGE ────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  await processQuery(text);
+}
+
+async function processQuery(text) {
+  addMsg(text, 'user');
+  const typing = addTyping();
+  const start = Date.now();
+
+  try {
+    const reply = await handleTask(text);
+    removeTyping(typing);
+    addMsg(reply, 'jarvis');
+    speak(reply);
+
+    const ms = Date.now() - start;
+    state.queries++;
+    state.totalMs += ms;
+    document.getElementById('stat-queries').textContent = state.queries;
+    document.getElementById('stat-speed').textContent = Math.round(state.totalMs / state.queries);
+
+    setAIStatus(true, PROVIDERS[state.provider].needsKey ? 'ONLINE' : 'LOCAL');
+    saveConfig();
+  } catch (e) {
+    removeTyping(typing);
+    addMsg(`⚠ Error: ${e.message}`, 'jarvis');
+    setAIStatus(false, 'ERROR');
+  }
+}
+
+function sendQuick(text) {
+  processQuery(text);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter') sendMessage();
+}
+
+// ─── CHAT UI ─────────────────────────────────────────────────────────────────
+function addMsg(text, who) {
+  const chat = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = `msg msg-${who}`;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const chat = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = 'typing-indicator';
+  div.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function removeTyping(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
+
+function clearChat() {
+  document.getElementById('chat-area').innerHTML =
+    '<div class="msg msg-sys">— CHAT CLEARED —</div>';
+  state.convHistory = [];
+}
+
+// ─── STATUS ──────────────────────────────────────────────────────────────────
+function setAIStatus(online, label) {
+  document.getElementById('ai-dot').className = 'status-dot' + (online ? '' : ' off');
+  document.getElementById('ai-status-text').textContent = label || (online ? 'ONLINE' : 'OFFLINE');
+}
+
+async function testConnection() {
+  addMsg('Testing connection...', 'sys');
+  setAIStatus(false, 'TESTING...');
+  try {
+    const reply = await callAI('Say "Connection successful" and nothing else.');
+    addMsg(`✓ ${reply}`, 'jarvis');
+    setAIStatus(true, 'ONLINE');
+  } catch (e) {
+    addMsg(`✗ Connection failed: ${e.message}`, 'jarvis');
+    setAIStatus(false, 'OFFLINE');
+  }
+}
+
+// ─── SPEECH RECOGNITION ──────────────────────────────────────────────────────
+function setupSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    document.getElementById('voice-status').textContent = '[ VOICE NOT SUPPORTED IN THIS BROWSER ]';
+    return;
+  }
+  state.recognition = new SR();
+  state.recognition.continuous = false;
+  state.recognition.interimResults = true;
+
+  state.recognition.onstart = () => {
+    state.listening = true;
+    document.getElementById('voice-btn').classList.add('listening');
+    document.getElementById('voice-status').textContent = '[ LISTENING... SPEAK NOW ]';
+    const vizInt = setInterval(() => {
+      if (!state.listening) { clearInterval(vizInt); animateVisualizer(false); }
+      else animateVisualizer(true);
+    }, 100);
+  };
+
+  state.recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('text-input').value = transcript;
+    document.getElementById('voice-status').textContent = `[ HEARD: "${transcript.slice(0,50)}" ]`;
+  };
+
+  state.recognition.onend = () => {
+    state.listening = false;
+    document.getElementById('voice-btn').classList.remove('listening');
+    animateVisualizer(false);
+    const text = document.getElementById('text-input').value.trim();
+    if (text) {
+      document.getElementById('voice-status').textContent = '[ PROCESSING VOICE INPUT... ]';
+      document.getElementById('text-input').value = '';
+      processQuery(text);
+    } else {
+      document.getElementById('voice-status').textContent = '[ VOICE READY — CLICK MIC TO SPEAK ]';
+    }
+  };
+
+  state.recognition.onerror = (e) => {
+    state.listening = false;
+    document.getElementById('voice-btn').classList.remove('listening');
+    document.getElementById('voice-status').textContent = `[ ERROR: ${e.error} ]`;
+    animateVisualizer(false);
+  };
+}
+
+function toggleVoice() {
+  if (!state.recognition) return;
+  if (state.listening) {
+    state.recognition.stop();
+  } else {
+    const lang = document.getElementById('lang-select').value;
+    state.recognition.lang = lang;
+    state.recognition.start();
+  }
+}
+
+// ─── TEXT-TO-SPEECH ──────────────────────────────────────────────────────────
+function loadVoices() {
+  const updateVoices = () => {
+    state.voices = speechSynthesis.getVoices();
+    const sel = document.getElementById('voice-select');
+    sel.innerHTML = state.voices
+      .filter(v => v.lang.startsWith('en'))
+      .map((v, i) => `<option value="${i}">${v.name}</option>`)
+      .join('');
+  };
+  updateVoices();
+  speechSynthesis.onvoiceschanged = updateVoices;
+}
+
+function speak(text) {
+  speechSynthesis.cancel();
+  const clean = text.replace(/[*#`]/g, '').trim();
+  if (!clean) return;
+  const utter = new SpeechSynthesisUtterance(clean.slice(0, 500));
+  const vi = parseInt(document.getElementById('voice-select').value) || 0;
+  const enVoices = state.voices.filter(v => v.lang.startsWith('en'));
+  if (enVoices[vi]) utter.voice = enVoices[vi];
+  utter.rate = parseFloat(document.getElementById('speech-rate').value) || 1;
+  utter.pitch = 0.9;
+  utter.volume = 1;
+  speechSynthesis.speak(utter);
+}
+</script>
+</body>
+</html>
